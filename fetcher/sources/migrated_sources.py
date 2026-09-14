@@ -27,6 +27,7 @@ _SCHEME_PAIR_RE = re.compile(
     r"(?P<scheme>https?|socks4a?|socks5h?)://"
     r"(?P<authority>(?:[^\s/@:]+:[^\s/@:]+@)?" + _IP + r":\d{1,5})", re.I
 )
+_SCHEME_PREFIX_RE = re.compile(r"(?:https?|socks4a?|socks5h?)://[^\s]*$", re.I)
 _HTML_PAIR_RE = re.compile(
     r"<td[^>]*>\s*(" + _IP + r")\s*</td>\s*"
     r"<td[^>]*>\s*(\d{1,5})\s*</td>", re.I | re.S
@@ -54,7 +55,14 @@ def _pairs_from_text(text: str) -> Iterator[str]:
             if prefix:
                 value = prefix + value
             yield "%s://%s" % (scheme.lower(), value)
-    for host, port in _PAIR_RE.findall(text or ""):
+    source = text or ""
+    for match in _PAIR_RE.finditer(source):
+        # The scheme-aware pass already emitted this pair. Without this
+        # guard a mixed source could turn ``socks5://host:port`` into a second
+        # HTTP candidate (especially when credentials precede the host).
+        if _SCHEME_PREFIX_RE.search(source[max(0, match.start() - 128):match.start()]):
+            continue
+        host, port = match.groups()
         value = _valid_pair(host, port)
         if value:
             yield value

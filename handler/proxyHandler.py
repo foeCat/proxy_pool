@@ -26,22 +26,22 @@ class ProxyHandler(object):
         self.db = DbClient(self.conf.dbConn)
         self.db.changeTable(self.conf.tableName)
 
-    def get(self, https=False):
+    def get(self, https=False, protocol=None):
         """
         return a proxy
         Args:
             https: True/False
         Returns:
         """
-        proxy = self.db.get(https)
+        proxy = self.db.get(https) if protocol is None else self.db.get(https, protocol=protocol)
         return Proxy.createFromJson(proxy) if proxy else None
 
-    def pop(self, https):
+    def pop(self, https=False, protocol=None):
         """
         return and delete a useful proxy
         :return:
         """
-        proxy = self.db.pop(https)
+        proxy = self.db.pop(https) if protocol is None else self.db.pop(https, protocol=protocol)
         if proxy:
             return Proxy.createFromJson(proxy)
         return None
@@ -59,14 +59,14 @@ class ProxyHandler(object):
         :param proxy:
         :return:
         """
-        return self.db.delete(proxy.proxy)
+        return self.db.delete(proxy.storage_key)
 
-    def getAll(self, https=False):
+    def getAll(self, https=False, protocol=None):
         """
         get all proxy from pool as Proxy list
         :return:
         """
-        proxies = self.db.getAll(https)
+        proxies = self.db.getAll(https) if protocol is None else self.db.getAll(https, protocol=protocol)
         return [Proxy.createFromJson(_) for _ in proxies]
 
     def exists(self, proxy):
@@ -75,7 +75,7 @@ class ProxyHandler(object):
         :param proxy:
         :return:
         """
-        return self.db.exists(proxy.proxy)
+        return self.db.exists(proxy.storage_key)
 
     def getCount(self):
         """

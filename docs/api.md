@@ -7,11 +7,11 @@
 | 接口 | 方法 | 说明 | 参数 |
 |------|------|------|------|
 | `/` | GET | 返回 API 列表 | 无 |
-| `/get` | GET | 随机返回一个代理 | 可选：`?type=https` 过滤 HTTPS 代理 |
-| `/pop` | GET | 返回并删除一个代理 | 可选：`?type=https` 过滤 HTTPS 代理 |
-| `/all` | GET | 返回所有代理 | 可选：`?type=https` 过滤 HTTPS 代理 |
+| `/get` | GET | 随机返回一个代理 | 可选：`?type=https` 过滤 HTTPS 能力；`?protocol=http\|socks4\|socks5` 过滤传输协议 |
+| `/pop` | GET | 返回并删除一个代理 | 同 `/get` |
+| `/all` | GET | 返回所有代理 | 同 `/get` |
 | `/count` | GET | 返回代理数量统计 | 无 |
-| `/delete` | GET | 删除指定代理 | `?proxy=host:port` |
+| `/delete` | GET | 删除指定代理 | `?proxy=host:port` 或 `?proxy=socks5://host:port` |
 
 ## 调用示例
 
@@ -61,12 +61,19 @@ def get_html():
 proxy = requests.get("http://127.0.0.1:5010/get/?type=https").json()
 ```
 
+### 获取 SOCKS 代理
+
+```python
+# 只获取 SOCKS5 代理；返回值包含 protocol 和 proxy_url
+proxy = requests.get("http://127.0.0.1:5010/get/?protocol=socks5").json()
+```
+
 ### 获取代理统计
 
 ```python
-# 返回代理数量、类型分布、来源分布
+# 返回代理数量、HTTP 能力、传输协议和来源分布
 stats = requests.get("http://127.0.0.1:5010/count/").json()
-# 示例返回: {"http_type": {"http": 10, "https": 5}, "source": {"freeProxy01": 8, "freeProxy02": 7}, "count": 15}
+# 示例返回: {"http_type": {"http": 10, "https": 5}, "protocol": {"http": 10, "socks4": 2, "socks5": 3}, "source": {}, "count": 15}
 ```
 
 ## 直接读取数据库

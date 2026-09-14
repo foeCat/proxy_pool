@@ -42,13 +42,26 @@ class JsonResponse(Response):
 app.response_class = JsonResponse
 
 api_list = [
-    {"url": "/get", "params": "type: ''https'|''", "desc": "get a proxy"},
-    {"url": "/pop", "params": "", "desc": "get and delete a proxy"},
+    {"url": "/get", "params": "type: 'https'|'', protocol: 'http'|'socks4'|'socks5'", "desc": "get a proxy"},
+    {"url": "/pop", "params": "type: 'https'|'', protocol: 'http'|'socks4'|'socks5'", "desc": "get and delete a proxy"},
     {"url": "/delete", "params": "proxy: 'e.g. 127.0.0.1:8080'", "desc": "delete an unable proxy"},
-    {"url": "/all", "params": "type: ''https'|''", "desc": "get all proxy from proxy pool"},
+    {"url": "/all", "params": "type: ''https'|'', protocol: 'http'|'socks4'|'socks5'", "desc": "get all proxy from proxy pool"},
     {"url": "/count", "params": "", "desc": "return proxy count"}
     # 'refresh': 'refresh proxy pool',
 ]
+
+
+def _protocol_arg():
+    value = request.args.get("protocol", "").strip().lower()
+    if not value:
+        return None
+    if value not in {"http", "socks4", "socks5"}:
+        return "__invalid__"
+    return value
+
+
+def _invalid_protocol(protocol):
+    return protocol == "__invalid__"
 
 
 @app.route('/')
@@ -59,14 +72,20 @@ def index():
 @app.route('/get/')
 def get():
     https = request.args.get("type", "").lower() == 'https'
-    proxy = proxy_handler.get(https)
+    protocol = _protocol_arg()
+    if _invalid_protocol(protocol):
+        return {"code": 1, "src": "invalid protocol"}, 400
+    proxy = proxy_handler.get(https) if protocol is None else proxy_handler.get(https, protocol=protocol)
     return proxy.to_dict if proxy else {"code": 0, "src": "no proxy"}
 
 
 @app.route('/pop/')
 def pop():
     https = request.args.get("type", "").lower() == 'https'
-    proxy = proxy_handler.pop(https)
+    protocol = _protocol_arg()
+    if _invalid_protocol(protocol):
+        return {"code": 1, "src": "invalid protocol"}, 400
+    proxy = proxy_handler.pop(https) if protocol is None else proxy_handler.pop(https, protocol=protocol)
     return proxy.to_dict if proxy else {"code": 0, "src": "no proxy"}
 
 
@@ -79,7 +98,10 @@ def refresh():
 @app.route('/all/')
 def getAll():
     https = request.args.get("type", "").lower() == 'https'
-    proxies = proxy_handler.getAll(https)
+    protocol = _protocol_arg()
+    if _invalid_protocol(protocol):
+        return {"code": 1, "src": "invalid protocol"}, 400
+    proxies = proxy_handler.getAll(https) if protocol is None else proxy_handler.getAll(https, protocol=protocol)
     return jsonify([_.to_dict for _ in proxies])
 
 
@@ -94,13 +116,16 @@ def delete():
 def getCount():
     proxies = proxy_handler.getAll()
     http_type_dict = {}
+    protocol_dict = {"http": 0, "socks4": 0, "socks5": 0}
     source_dict = {}
     for proxy in proxies:
         http_type = 'https' if proxy.https else 'http'
         http_type_dict[http_type] = http_type_dict.get(http_type, 0) + 1
+        protocol_dict[proxy.protocol] = protocol_dict.get(proxy.protocol, 0) + 1
         for source in proxy.source.split('/'):
             source_dict[source] = source_dict.get(source, 0) + 1
-    return {"http_type": http_type_dict, "source": source_dict, "count": len(proxies)}
+    return {"http_type": http_type_dict, "protocol": protocol_dict,
+            "source": source_dict, "count": len(proxies)}
 
 
 def runFlask():

@@ -1,22 +1,21 @@
 # -*- coding: utf-8 -*-
+"""Proxy format and transport validators.
+
+The public validator hooks still accept the legacy ``host:port`` string.  A
+protocol-aware :class:`~helper.proxy.Proxy` may be passed as well, which lets
+requests use PySocks for SOCKS4/5 sources.
 """
--------------------------------------------------
-   File Name：     _validators
-   Description :   定义proxy验证方法
-   Author :        JHao
-   date：          2021/5/25
--------------------------------------------------
-   Change Activity:
-                   2023/03/10: 支持带用户认证的代理格式 username:password@ip:port
--------------------------------------------------
-"""
+
 __author__ = 'JHao'
 
 import re
+from urllib.parse import urlsplit
+
 from requests import head
 from util.six import withMetaclass
 from util.singleton import Singleton
 from handler.configHandler import ConfigHandler
+from helper.proxy import Proxy
 
 conf = ConfigHandler()
 
@@ -49,38 +48,72 @@ class ProxyValidator(withMetaclass(Singleton)):
         return func
 
 
+def _proxy_object(proxy):
+    return proxy if isinstance(proxy, Proxy) else Proxy(str(proxy or ""))
+
+
+def _proxy_value(proxy):
+    """Return a normalized proxy URL and protocol for validators."""
+    obj = _proxy_object(proxy)
+    return obj, obj.proxy_url
+
+
+def build_proxies(proxy):
+    """Build a requests ``proxies`` mapping for HTTP, SOCKS4 or SOCKS5."""
+    obj, proxy_url = _proxy_value(proxy)
+    if obj.protocol == "http":
+        # An HTTP proxy handles both plain HTTP and HTTPS CONNECT requests.
+        transport = "http://%s" % obj.proxy
+        return {"http": transport, "https": transport}
+    if obj.protocol == "socks4":
+        transport = "socks4a://%s" % obj.proxy
+    elif obj.protocol == "socks5":
+        # socks5h delegates DNS resolution to the proxy and works with PySocks.
+        transport = "socks5h://%s" % obj.proxy
+    else:  # normalize_protocol currently maps unknown values to HTTP.
+        transport = proxy_url
+    return {"http": transport, "https": transport}
+
+
 @ProxyValidator.addPreValidator
 def formatValidator(proxy):
-    """检查代理格式"""
-    return True if IP_REGEX.fullmatch(proxy) else False
+    """Check an IPv4 proxy with optional scheme and credentials."""
+    raw = proxy.proxy_url if isinstance(proxy, Proxy) else str(proxy or "").strip()
+    if not raw:
+        return False
+    if "://" in raw:
+        parsed = urlsplit(raw)
+        if parsed.scheme.lower() not in {"http", "https", "socks4", "socks4a", "socks5", "socks5h"}:
+            return False
+        if not parsed.hostname or parsed.port is None:
+            return False
+        raw = parsed.netloc
+    return IP_REGEX.fullmatch(raw) is not None
 
 
 @ProxyValidator.addHttpValidator
 def httpTimeOutValidator(proxy):
-    """ http检测超时 """
-
-    proxies = {"http": "http://{proxy}".format(proxy=proxy), "https": "https://{proxy}".format(proxy=proxy)}
-
+    """Validate access to the configured HTTP endpoint."""
     try:
-        r = head(conf.httpUrl, headers=HEADER, proxies=proxies, timeout=conf.verifyTimeout)
-        return True if r.status_code == 200 else False
-    except Exception as e:
+        r = head(conf.httpUrl, headers=HEADER, proxies=build_proxies(proxy),
+                 timeout=conf.verifyTimeout)
+        return r.status_code == 200
+    except Exception:
         return False
 
 
 @ProxyValidator.addHttpsValidator
 def httpsTimeOutValidator(proxy):
-    """https检测超时"""
-
-    proxies = {"http": "http://{proxy}".format(proxy=proxy), "https": "https://{proxy}".format(proxy=proxy)}
+    """Validate HTTPS CONNECT access to the configured HTTPS endpoint."""
     try:
-        r = head(conf.httpsUrl, headers=HEADER, proxies=proxies, timeout=conf.verifyTimeout, verify=False)
-        return True if r.status_code == 200 else False
-    except Exception as e:
+        r = head(conf.httpsUrl, headers=HEADER, proxies=build_proxies(proxy),
+                 timeout=conf.verifyTimeout, verify=False)
+        return r.status_code == 200
+    except Exception:
         return False
 
 
 @ProxyValidator.addHttpValidator
 def customValidatorExample(proxy):
-    """自定义validator函数，校验代理是否可用, 返回True/False"""
+    """Extension hook example; always accepts the proxy."""
     return True

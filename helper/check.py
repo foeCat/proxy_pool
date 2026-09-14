@@ -58,14 +58,14 @@ class DoValidator(object):
     @classmethod
     def httpValidator(cls, proxy):
         for func in ProxyValidator.http_validator:
-            if not func(proxy.proxy):
+            if not func(proxy):
                 return False
         return True
 
     @classmethod
     def httpsValidator(cls, proxy):
         for func in ProxyValidator.https_validator:
-            if not func(proxy.proxy):
+            if not func(proxy):
                 return False
         return True
 
@@ -79,7 +79,12 @@ class DoValidator(object):
     @classmethod
     def regionGetter(cls, proxy):
         try:
-            url = 'https://api.ip.sb/geoip/%s' % proxy.proxy.split(':')[0]
+            # Proxy.host is not part of the upstream object API, so extract
+            # the authority through its normalized URL. This also handles
+            # credentials and bracketed IPv6 values safely.
+            from urllib.parse import urlsplit
+            host = urlsplit(proxy.proxy_url).hostname or proxy.proxy.split(':')[0]
+            url = 'https://api.ip.sb/geoip/%s' % host
             r = WebRequest().get(url=url, retry_time=1, timeout=2).json
             return r.get('country_code')
         except:

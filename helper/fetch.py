@@ -104,13 +104,16 @@ class _ThreadFetcher(Thread):
         self.log.info("ProxyFetch - {func}: start".format(func=fetcher_name))
         try:
             for proxy in self.fetcher_class().fetch():
+                proxy = str(proxy or "").strip()
+                if not proxy:
+                    continue
                 self.log.info('ProxyFetch - %s: %s ok' % (fetcher_name, proxy.ljust(23)))
-                proxy = proxy.strip()
-                if proxy in self.proxy_dict:
-                    self.proxy_dict[proxy].add_source(fetcher_name)
+                proxy_obj = Proxy(proxy, source=fetcher_name)
+                key = proxy_obj.storage_key
+                if key in self.proxy_dict:
+                    self.proxy_dict[key].add_source(fetcher_name)
                 else:
-                    self.proxy_dict[proxy] = Proxy(
-                        proxy, source=fetcher_name)
+                    self.proxy_dict[key] = proxy_obj
         except Exception as e:
             self.log.error("ProxyFetch - {func}: error".format(func=fetcher_name))
             self.log.error(str(e))
@@ -148,5 +151,5 @@ class Fetcher(object):
 
         self.log.info("ProxyFetch - all complete!")
         for _ in proxy_dict.values():
-            if DoValidator.preValidator(_.proxy):
+            if DoValidator.preValidator(_):
                 yield _

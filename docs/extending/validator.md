@@ -4,6 +4,11 @@
 
 项目中使用的代理校验方法全部定义在 `helper/validator.py` 中，通过 `ProxyValidator` 类中提供的装饰器来区分。校验方法返回 `True` 表示校验通过，返回 `False` 表示校验不通过。
 
+校验函数接收 `Proxy` 对象；`proxy.proxy` 是不带协议的 `host:port`，
+`proxy.protocol` 是规范化后的 `http`、`socks4` 或 `socks5`，而
+`proxy.proxy_url` 包含完整 scheme。自定义 requests 校验可复用
+`helper.validator.build_proxies(proxy)`，它会为 SOCKS 使用 PySocks。
+
 代理校验方法分为三类：
 
 | 类型 | 装饰器 | 说明 |
@@ -39,10 +44,12 @@ graph LR
 ### 示例 1：自定义代理可用性校验
 
 ```python
+from helper.validator import build_proxies
+
 @ProxyValidator.addHttpValidator
 def customValidatorExample01(proxy):
     """自定义代理可用性校验函数"""
-    proxies = {"http": "http://{proxy}".format(proxy=proxy)}
+    proxies = build_proxies(proxy)
     try:
         r = requests.get("http://www.baidu.com/", headers=HEADER, proxies=proxies, timeout=5)
         return True if r.status_code == 200 and len(r.content) > 200 else False
@@ -56,7 +63,7 @@ def customValidatorExample01(proxy):
 @ProxyValidator.addHttpsValidator
 def customValidatorExample02(proxy):
     """自定义代理是否支持 HTTPS 校验函数"""
-    proxies = {"https": "https://{proxy}".format(proxy=proxy)}
+    proxies = build_proxies(proxy)
     try:
         r = requests.get("https://www.baidu.com/", headers=HEADER, proxies=proxies, timeout=5, verify=False)
         return True if r.status_code == 200 and len(r.content) > 200 else False

@@ -1,25 +1,54 @@
 # -*- coding: utf-8 -*-
-"""
--------------------------------------------------
-   File Name：     Proxy
-   Description :   代理对象类型封装
-   Author :        JHao
-   date：          2019/7/11
--------------------------------------------------
-   Change Activity:
-                   2019/7/11: 代理对象类型封装
--------------------------------------------------
-"""
+"""Protocol-aware proxy value object."""
+
 __author__ = 'JHao'
 
 import json
+from urllib.parse import quote, urlsplit
+
+
+PROTOCOL_ALIASES = {
+    "http": "http",
+    "https": "http",      # HTTPS proxy lists still use HTTP CONNECT.
+    "socks": "socks5",
+    "socks4": "socks4",
+    "socks4a": "socks4",
+    "socks5": "socks5",
+    "socks5h": "socks5",
+}
+
+
+def normalize_protocol(protocol):
+    return PROTOCOL_ALIASES.get(str(protocol or "http").lower(), "http")
+
+
+def _split_proxy(value, protocol=None):
+    raw = str(value or "").strip()
+    if "://" not in raw:
+        return normalize_protocol(protocol), raw
+    parsed = urlsplit(raw)
+    selected = normalize_protocol(parsed.scheme)
+    host = parsed.hostname or ""
+    if ":" in host and not host.startswith("["):
+        host = "[%s]" % host
+    try:
+        port = parsed.port
+    except ValueError:
+        port = None
+    hostport = host if port is None else "%s:%d" % (host, port)
+    if parsed.username is not None:
+        user = quote(parsed.username, safe="")
+        password = quote(parsed.password or "", safe="")
+        hostport = "%s:%s@%s" % (user, password, hostport)
+    return selected, hostport
 
 
 class Proxy(object):
 
     def __init__(self, proxy, fail_count=0, region="", anonymous="",
-                 source="", check_count=0, last_status="", last_time="", https=False):
-        self._proxy = proxy
+                 source="", check_count=0, last_status="", last_time="",
+                 https=False, protocol=None):
+        self._protocol, self._proxy = _split_proxy(proxy, protocol)
         self._fail_count = fail_count
         self._region = region
         self._anonymous = anonymous
@@ -31,67 +60,74 @@ class Proxy(object):
 
     @classmethod
     def createFromJson(cls, proxy_json):
-        _dict = json.loads(proxy_json)
-        return cls(proxy=_dict.get("proxy", ""),
-                   fail_count=_dict.get("fail_count", 0),
-                   region=_dict.get("region", ""),
-                   anonymous=_dict.get("anonymous", ""),
-                   source=_dict.get("source", ""),
-                   check_count=_dict.get("check_count", 0),
-                   last_status=_dict.get("last_status", ""),
-                   last_time=_dict.get("last_time", ""),
-                   https=_dict.get("https", False)
-                   )
+        data = json.loads(proxy_json)
+        return cls(proxy=data.get("proxy_url") or data.get("proxy", ""),
+                   protocol=data.get("protocol") or data.get("scheme"),
+                   fail_count=data.get("fail_count", 0),
+                   region=data.get("region", ""),
+                   anonymous=data.get("anonymous", ""),
+                   source=data.get("source", ""),
+                   check_count=data.get("check_count", 0),
+                   last_status=data.get("last_status", ""),
+                   last_time=data.get("last_time", ""),
+                   https=data.get("https", False))
 
     @property
     def proxy(self):
-        """ 代理 ip:port """
         return self._proxy
 
     @property
+    def protocol(self):
+        return self._protocol
+
+    @property
+    def scheme(self):
+        return self.protocol
+
+    @property
+    def proxy_url(self):
+        return "%s://%s" % (self.protocol, self.proxy)
+
+    @property
+    def storage_key(self):
+        # Keep legacy HTTP keys readable while separating SOCKS transports.
+        return self.proxy if self.protocol == "http" else self.proxy_url
+
+    @property
     def fail_count(self):
-        """ 检测失败次数 """
         return self._fail_count
 
     @property
     def region(self):
-        """ 地理位置(国家/城市) """
         return self._region
 
     @property
     def anonymous(self):
-        """ 匿名 """
         return self._anonymous
 
     @property
     def source(self):
-        """ 代理来源 """
         return '/'.join(self._source)
 
     @property
     def check_count(self):
-        """ 代理检测次数 """
         return self._check_count
 
     @property
     def last_status(self):
-        """ 最后一次检测结果  True -> 可用; False -> 不可用"""
         return self._last_status
 
     @property
     def last_time(self):
-        """ 最后一次检测时间 """
         return self._last_time
 
     @property
     def https(self):
-        """ 是否支持https """
         return self._https
 
     @property
     def to_dict(self):
-        """ 属性字典 """
-        return {"proxy": self.proxy,
+        data = {"proxy": self.proxy,
                 "https": self.https,
                 "fail_count": self.fail_count,
                 "region": self.region,
@@ -100,10 +136,12 @@ class Proxy(object):
                 "check_count": self.check_count,
                 "last_status": self.last_status,
                 "last_time": self.last_time}
+        if self.protocol != "http":
+            data.update({"protocol": self.protocol, "proxy_url": self.proxy_url})
+        return data
 
     @property
     def to_json(self):
-        """ 属性json格式 """
         return json.dumps(self.to_dict, ensure_ascii=False)
 
     @fail_count.setter

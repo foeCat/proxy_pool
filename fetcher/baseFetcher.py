@@ -24,6 +24,7 @@ class BaseFetcher(object):
 
     # ---- 子类可覆盖 ----
     enabled = True   # 是否启用，设为 False 可禁用该源
+    source_protocol = "http"
 
     def fetch(self):
         """爬取代理，yield "host:port" 字符串"""

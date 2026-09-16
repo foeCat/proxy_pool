@@ -73,23 +73,9 @@ class RedisClient(object):
     def _values(self):
         return list(self.__conn.hvals(self.name))
 
-    def _privacy_values(self):
-        values = self._values()
-        if self.name != "privacy_proxy":
-            return values
-        return [value for value in values
-                if self._protocol_variant(value) in {"socks5", "socks5h"}]
-
     def get(self, https=False, protocol=None):
-        values = [value for value in self._privacy_values()
+        values = [value for value in self._values()
                   if self._matches(value, https=https, protocol=protocol)]
-        if self.name == "privacy_proxy" and values:
-            # The privacy pool is ordered by policy: socks5h (100) first,
-            # then socks5 (50). Equivalent entries remain random.
-            top_priority = max(int(self._data(value).get("priority", 0) or 0)
-                               for value in values)
-            values = [value for value in values
-                      if int(self._data(value).get("priority", 0) or 0) == top_priority]
         return choice(values) if values else None
 
     def put(self, proxy_obj):
@@ -117,14 +103,14 @@ class RedisClient(object):
         return self.__conn.hset(self.name, proxy_obj.storage_key, proxy_obj.to_json)
 
     def getAll(self, https=False, protocol=None):
-        return [value for value in self._privacy_values()
+        return [value for value in self._values()
                 if self._matches(value, https=https, protocol=protocol)]
 
     def clear(self):
         return self.__conn.delete(self.name)
 
     def getCount(self):
-        values = self._privacy_values()
+        values = self._values()
         protocol_count = {"http": 0, "socks4": 0, "socks5": 0}
         https_count = 0
         for value in values:

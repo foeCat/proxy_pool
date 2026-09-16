@@ -37,7 +37,7 @@ class TestDoValidator:
         mock_conf.proxyRegion = False
         mock_conf_cls.return_value = mock_conf
 
-        proxy = Proxy("1.2.3.4:8080", source="test")
+        proxy = Proxy("socks5h://1.2.3.4:1080", source="test")
         proxy.fail_count = 0
 
         # Patch DoValidator.conf at class level
@@ -59,7 +59,7 @@ class TestDoValidator:
         mock_conf = MagicMock()
         mock_conf.proxyRegion = False
 
-        proxy = Proxy("1.2.3.4:8080", source="test")
+        proxy = Proxy("socks5h://1.2.3.4:1080", source="test")
 
         with patch.object(DoValidator, "conf", mock_conf):
             result = DoValidator.validator(proxy, "use")
@@ -76,7 +76,7 @@ class TestDoValidator:
         mock_conf = MagicMock()
         mock_conf.proxyRegion = False
 
-        proxy = Proxy("1.2.3.4:8080", source="test")
+        proxy = Proxy("socks5h://1.2.3.4:1080", source="test")
         proxy.fail_count = 0
 
         with patch.object(DoValidator, "conf", mock_conf):
@@ -200,7 +200,7 @@ class TestThreadCheckerIfRaw:
         mock_ph = MagicMock()
         mock_ph.exists.return_value = False
 
-        proxy = Proxy("1.2.3.4:8080", source="test")
+        proxy = Proxy("socks5h://1.2.3.4:1080", source="test")
         proxy.last_status = True
 
         checker = _make_checker("raw", mock_ph)
@@ -212,7 +212,7 @@ class TestThreadCheckerIfRaw:
         mock_ph = MagicMock()
         mock_ph.exists.return_value = True
 
-        proxy = Proxy("1.2.3.4:8080", source="test")
+        proxy = Proxy("socks5h://1.2.3.4:1080", source="test")
         proxy.last_status = True
 
         checker = _make_checker("raw", mock_ph)
@@ -223,7 +223,7 @@ class TestThreadCheckerIfRaw:
         """last_status=False -> 不 put"""
         mock_ph = MagicMock()
 
-        proxy = Proxy("1.2.3.4:8080", source="test")
+        proxy = Proxy("socks5h://1.2.3.4:1080", source="test")
         proxy.last_status = False
 
         checker = _make_checker("raw", mock_ph)
@@ -238,7 +238,7 @@ class TestThreadCheckerIfUse:
         """last_status=True -> put"""
         mock_ph = MagicMock()
 
-        proxy = Proxy("1.2.3.4:8080", source="test")
+        proxy = Proxy("socks5h://1.2.3.4:1080", source="test")
         proxy.last_status = True
 
         checker = _make_checker("use", mock_ph)
@@ -251,7 +251,7 @@ class TestThreadCheckerIfUse:
         mock_conf = MagicMock()
         mock_conf.maxFailCount = 3
 
-        proxy = Proxy("1.2.3.4:8080", source="test")
+        proxy = Proxy("socks5h://1.2.3.4:1080", source="test")
         proxy.last_status = False
         proxy.fail_count = 5
 
@@ -266,7 +266,7 @@ class TestThreadCheckerIfUse:
         mock_conf = MagicMock()
         mock_conf.maxFailCount = 3
 
-        proxy = Proxy("1.2.3.4:8080", source="test")
+        proxy = Proxy("socks5h://1.2.3.4:1080", source="test")
         proxy.last_status = False
         proxy.fail_count = 2
 
@@ -274,3 +274,13 @@ class TestThreadCheckerIfUse:
         checker._ThreadChecker__ifUse(proxy)
         mock_ph.put.assert_called_once_with(proxy)
         mock_ph.delete.assert_not_called()
+
+    def test_ifuse_non_socks5h_is_deleted(self):
+        mock_ph = MagicMock()
+        proxy = Proxy("http://1.2.3.4:8080", source="test")
+
+        checker = _make_checker("use", mock_ph)
+        checker._ThreadChecker__ifUse(proxy)
+
+        mock_ph.delete.assert_called_once_with(proxy)
+        mock_ph.put.assert_not_called()

@@ -28,6 +28,13 @@ def test_proxy_protocol_and_requests_mapping():
     assert build_proxies(proxy)["https"].startswith("socks5h://")
 
 
+def test_proxy_can_be_promoted_to_remote_dns_storage():
+    proxy = Proxy("socks5://1.2.3.4:1080").promote_socks5h()
+    assert proxy.is_socks5h is True
+    assert proxy.proxy_url == "socks5h://1.2.3.4:1080"
+    assert proxy.to_dict["protocol"] == "socks5h"
+
+
 def test_redis_keeps_same_endpoint_for_different_protocols():
     client, _ = _client()
     client.put(Proxy("socks4://1.2.3.4:1080"))

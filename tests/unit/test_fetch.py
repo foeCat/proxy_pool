@@ -116,29 +116,42 @@ class TestDiscoverFetchers:
 class TestThreadFetcher:
 
     def test_collects_proxies(self):
-        """fetcher.fetch() yield 代理 -> proxy_dict 有值"""
+        """SOCKS5 candidates are normalized to SOCKS5H."""
         mock_cls = MagicMock()
         mock_cls.name = "test_fetcher"
-        mock_cls.return_value.fetch.return_value = ["1.2.3.4:8080", "5.6.7.8:443"]
+        mock_cls.return_value.fetch.return_value = [
+            "socks5://1.2.3.4:1080", "socks5h://5.6.7.8:1080"]
 
         proxy_dict = {}
         thread = _ThreadFetcher(mock_cls, proxy_dict)
         thread.run()
 
-        assert "1.2.3.4:8080" in proxy_dict
-        assert "5.6.7.8:443" in proxy_dict
-        assert isinstance(proxy_dict["1.2.3.4:8080"], Proxy)
+        assert "socks5h://1.2.3.4:1080" in proxy_dict
+        assert "socks5h://5.6.7.8:1080" in proxy_dict
+        assert isinstance(proxy_dict["socks5h://1.2.3.4:1080"], Proxy)
+
+    def test_skips_http_socks4_and_bare_candidates(self):
+        mock_cls = MagicMock()
+        mock_cls.name = "test_fetcher"
+        mock_cls.return_value.fetch.return_value = [
+            "1.2.3.4:8080", "http://2.2.2.2:80", "socks4://3.3.3.3:1080"]
+
+        proxy_dict = {}
+        _ThreadFetcher(mock_cls, proxy_dict).run()
+
+        assert proxy_dict == {}
 
     def test_merges_duplicate_sources(self):
         """同一代理出现两次 -> add_source 被调用"""
         mock_cls = MagicMock()
         mock_cls.name = "test_fetcher"
-        mock_cls.return_value.fetch.return_value = ["1.2.3.4:8080", "1.2.3.4:8080"]
+        mock_cls.return_value.fetch.return_value = [
+            "socks5://1.2.3.4:1080", "socks5h://1.2.3.4:1080"]
 
         proxy_dict = {}
         thread = _ThreadFetcher(mock_cls, proxy_dict)
         thread.run()
 
-        assert "1.2.3.4:8080" in proxy_dict
+        assert "socks5h://1.2.3.4:1080" in proxy_dict
         # source 应该包含两次 "test_fetcher"（add_source 去重，但只出现一次）
-        assert "test_fetcher" in proxy_dict["1.2.3.4:8080"].source
+        assert "test_fetcher" in proxy_dict["socks5h://1.2.3.4:1080"].source

@@ -80,6 +80,7 @@ def _discover_fetchers(exclude_list):
                     and attr is not BaseFetcher
                     and attr.name
                     and attr.enabled
+                    and attr.source_protocol in {"socks5", "mixed"}
                     and attr.__name__ not in exclude_list):
                 fetcher_classes.append(attr)
 
@@ -107,8 +108,13 @@ class _ThreadFetcher(Thread):
                 proxy = str(proxy or "").strip()
                 if not proxy:
                     continue
-                self.log.info('ProxyFetch - %s: %s ok' % (fetcher_name, proxy.ljust(23)))
                 proxy_obj = Proxy(proxy, source=fetcher_name)
+                # This deployment keeps one pool only. Bare, HTTP and SOCKS4
+                # candidates never enter validation or Redis.
+                if proxy_obj.protocol != "socks5":
+                    continue
+                proxy_obj.promote_socks5h()
+                self.log.info('ProxyFetch - %s: %s ok' % (fetcher_name, proxy_obj.proxy_url.ljust(23)))
                 key = proxy_obj.storage_key
                 if key in self.proxy_dict:
                     self.proxy_dict[key].add_source(fetcher_name)

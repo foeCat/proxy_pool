@@ -42,10 +42,14 @@ def _payload(row: sqlite3.Row) -> Tuple[str, str]:
     raw_proxy = row["proxy"] or _host_port(row)
     protocol = row["scheme"] or None
     proxy_obj = Proxy(raw_proxy, protocol=protocol)
+    if proxy_obj.protocol != "socks5":
+        raise ValueError("only SOCKS5 can enter the SOCKS5H pool")
+    proxy_obj.promote_socks5h()
     proxy = proxy_obj.proxy
     value: Dict[str, object] = {
         "proxy": proxy,
-        "protocol": proxy_obj.protocol,
+        "protocol": proxy_obj.scheme,
+        "proxy_url": proxy_obj.proxy_url,
         "https": False,
         "fail_count": int(row["fail_count"] or 0),
         "region": row["geo"] or "",
@@ -94,7 +98,10 @@ def main() -> int:
     source.row_factory = sqlite3.Row
     rows = source.execute(
         "SELECT proxy, scheme, host, port, fail_count, geo, anonymity, source, "
-        "success_count, last_check, last_ok FROM proxies WHERE ok=1 ORDER BY proxy"
+        "success_count, last_check, last_ok FROM proxies "
+        "WHERE ok=1 AND (lower(scheme) IN ('socks5', 'socks5h') "
+        "OR lower(proxy) LIKE 'socks5://%' OR lower(proxy) LIKE 'socks5h://%') "
+        "ORDER BY proxy"
     )
     client = None if args.dry_run else redis.Redis.from_url(
         args.redis_url, decode_responses=True

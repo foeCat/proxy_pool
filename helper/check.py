@@ -118,6 +118,10 @@ class _ThreadChecker(Thread):
             self.target_queue.task_done()
 
     def __ifRaw(self, proxy):
+        if not proxy.is_socks5h:
+            self.log.info('RawProxyCheck - {}: {} skip non-SOCKS5H'.format(
+                self.name, proxy.proxy.ljust(23)))
+            return
         if proxy.last_status:
             if self.proxy_handler.exists(proxy):
                 self.log.info('RawProxyCheck - {}: {} exist'.format(self.name, proxy.proxy.ljust(23)))
@@ -128,6 +132,11 @@ class _ThreadChecker(Thread):
             self.log.info('RawProxyCheck - {}: {} fail'.format(self.name, proxy.proxy.ljust(23)))
 
     def __ifUse(self, proxy):
+        if not proxy.is_socks5h:
+            self.log.info('UseProxyCheck - {}: {} delete non-SOCKS5H'.format(
+                self.name, proxy.proxy.ljust(23)))
+            self.proxy_handler.delete(proxy)
+            return
         if proxy.last_status:
             self.log.info('UseProxyCheck - {}: {} pass'.format(self.name, proxy.proxy.ljust(23)))
             self.proxy_handler.put(proxy)

@@ -47,7 +47,13 @@ class Proxy(object):
 
     def __init__(self, proxy, fail_count=0, region="", anonymous="",
                  source="", check_count=0, last_status="", last_time="",
-                 https=False, protocol=None):
+                 https=False, protocol=None, **metadata):
+        raw_proxy = str(proxy or "")
+        if "://" in raw_proxy:
+            raw_scheme = raw_proxy.split("://", 1)[0].lower()
+        else:
+            raw_scheme = str(protocol or "").lower()
+        self._scheme = raw_scheme if raw_scheme in {"socks5", "socks5h"} else ""
         self._protocol, self._proxy = _split_proxy(proxy, protocol)
         self._fail_count = fail_count
         self._region = region
@@ -57,10 +63,12 @@ class Proxy(object):
         self._last_status = last_status
         self._last_time = last_time
         self._https = https
+        self._metadata = metadata
 
     @classmethod
     def createFromJson(cls, proxy_json):
         data = json.loads(proxy_json)
+        extras = {key: data[key] for key in ("privacy_pass", "exit_ip", "header_leak", "latency_ms", "dns_mode", "priority", "checked_at") if key in data}
         return cls(proxy=data.get("proxy_url") or data.get("proxy", ""),
                    protocol=data.get("protocol") or data.get("scheme"),
                    fail_count=data.get("fail_count", 0),
@@ -70,7 +78,7 @@ class Proxy(object):
                    check_count=data.get("check_count", 0),
                    last_status=data.get("last_status", ""),
                    last_time=data.get("last_time", ""),
-                   https=data.get("https", False))
+                   https=data.get("https", False), **extras)
 
     @property
     def proxy(self):
@@ -86,7 +94,7 @@ class Proxy(object):
 
     @property
     def proxy_url(self):
-        return "%s://%s" % (self.protocol, self.proxy)
+        return "%s://%s" % (self._scheme or self.protocol, self.proxy)
 
     @property
     def storage_key(self):
@@ -137,7 +145,9 @@ class Proxy(object):
                 "last_status": self.last_status,
                 "last_time": self.last_time}
         if self.protocol != "http":
-            data.update({"protocol": self.protocol, "proxy_url": self.proxy_url})
+            data.update({"protocol": self._scheme or self.protocol, "proxy_url": self.proxy_url})
+        if self._metadata:
+            data.update(self._metadata)
         return data
 
     @property

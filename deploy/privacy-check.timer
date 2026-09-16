@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodic privacy proxy pool rebuild
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=20min
+Persistent=true
+Unit=privacy-check.service
+
+[Install]
+WantedBy=timers.target

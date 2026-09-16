@@ -42,10 +42,10 @@ class JsonResponse(Response):
 app.response_class = JsonResponse
 
 api_list = [
-    {"url": "/get", "params": "type: 'https'|'', protocol: 'http'|'socks4'|'socks5'", "desc": "get a proxy"},
-    {"url": "/pop", "params": "type: 'https'|'', protocol: 'http'|'socks4'|'socks5'", "desc": "get and delete a proxy"},
+    {"url": "/get", "params": "type: 'https'|'', protocol: 'http'|'socks4'|'socks5'|'socks5h'", "desc": "get a proxy"},
+    {"url": "/pop", "params": "type: 'https'|'', protocol: 'http'|'socks4'|'socks5'|'socks5h'", "desc": "get and delete a proxy"},
     {"url": "/delete", "params": "proxy: 'e.g. 127.0.0.1:8080'", "desc": "delete an unable proxy"},
-    {"url": "/all", "params": "type: ''https'|'', protocol: 'http'|'socks4'|'socks5'", "desc": "get all proxy from proxy pool"},
+    {"url": "/all", "params": "type: ''https'|'', protocol: 'http'|'socks4'|'socks5'|'socks5h'", "desc": "get all proxy from proxy pool"},
     {"url": "/count", "params": "", "desc": "return proxy count"}
     # 'refresh': 'refresh proxy pool',
 ]
@@ -55,7 +55,7 @@ def _protocol_arg():
     value = request.args.get("protocol", "").strip().lower()
     if not value:
         return None
-    if value not in {"http", "socks4", "socks5"}:
+    if value not in {"http", "socks4", "socks5", "socks5h"}:
         return "__invalid__"
     return value
 
@@ -121,7 +121,10 @@ def getCount():
     for proxy in proxies:
         http_type = 'https' if proxy.https else 'http'
         http_type_dict[http_type] = http_type_dict.get(http_type, 0) + 1
-        protocol_dict[proxy.protocol] = protocol_dict.get(proxy.protocol, 0) + 1
+        # ``Proxy.protocol`` normalizes socks5h to socks5 for legacy callers;
+        # API statistics retain the exact privacy transport when present.
+        protocol_name = proxy.to_dict.get("protocol", proxy.protocol)
+        protocol_dict[protocol_name] = protocol_dict.get(protocol_name, 0) + 1
         for source in proxy.source.split('/'):
             source_dict[source] = source_dict.get(source, 0) + 1
     return {"http_type": http_type_dict, "protocol": protocol_dict,
